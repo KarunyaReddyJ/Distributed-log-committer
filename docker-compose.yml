@@ -1,0 +1,49 @@
+version: "3.9"
+
+# ─── Shared defaults ─────────────────────────────────────────────────────────
+x-server-defaults: &server-defaults
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+  restart: unless-stopped
+  networks:
+    - log_net
+
+services:
+
+  # ── Primary log-committer TCP node ─────────────────────────────────────────
+  log-committer-primary:
+    <<: *server-defaults
+    container_name: log_committer_primary
+    environment:
+      TCP_HOST: "0.0.0.0"
+      TCP_PORT: "9090"
+      THREAD_COUNT: "4"
+    ports:
+      - "9090:9090"          # expose to host for local client testing
+    volumes:
+      - log_data:/app/data   # mount WAL / log segment directory here
+
+  # ── Secondary replica node (same image, different port) ────────────────────
+  log-committer-secondary:
+    <<: *server-defaults
+    container_name: log_committer_secondary
+    environment:
+      TCP_HOST: "0.0.0.0"
+      TCP_PORT: "9091"
+      THREAD_COUNT: "4"
+    ports:
+      - "9091:9091"
+    volumes:
+      - log_data_replica:/app/data
+    depends_on:
+      - log-committer-primary
+
+networks:
+  log_net:
+    driver: bridge
+
+volumes:
+  log_data:
+  log_data_replica:
